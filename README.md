@@ -22,14 +22,26 @@ The list refreshes when you open the dropdown and every 5 seconds while it is op
 ## Install
 
 ```sh
+brew install mondial7/tap/local-servers
+```
+
+Or build it from source, which puts `Local Servers.app` in `/Applications` and
+starts it:
+
+```sh
 ./install.sh
 ```
 
-Builds a universal binary, puts `Local Servers.app` in `/Applications` and
-starts it. There is no dock icon — it lives in the menu bar only. Enable
-*Launch at login* from the `…` menu in the dropdown to have it always there.
+Either way you get a universal binary (arm64 + x86_64). There is no dock icon —
+it lives in the menu bar only. Enable *Launch at login* from the `…` menu in the
+dropdown to have it always there.
 
-To remove it: quit from the dropdown and `rm -rf "/Applications/Local Servers.app"`.
+To remove it: `brew uninstall local-servers`, or quit from the dropdown and
+`rm -rf "/Applications/Local Servers.app"` for a source install.
+
+The app is ad-hoc signed rather than notarised, so a manual download from the
+releases page needs a right-click → Open the first time. The cask strips the
+quarantine attribute for you.
 
 ## How it works
 
