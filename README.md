@@ -59,6 +59,29 @@ No dependencies, no elevated privileges, ~600 lines of Swift/SwiftUI:
 `lsof` runs unprivileged, so the list covers processes owned by you — which is
 every dev server you start. Requires macOS 13+.
 
+## Security notes
+
+Everything this app displays is chosen by the process that is listening — a page
+`<title>`, an executable name, an argv entry — so the app treats all of it as
+untrusted input:
+
+- Probes never leave this machine. The TLS exception for self-signed dev
+  certificates applies only to `127.0.0.1`/`::1`, everything else gets normal
+  certificate validation, and redirects are refused rather than followed.
+- Displayed strings are stripped of control characters, bidi overrides and
+  zero-width characters, so a listener cannot dress its row up as another one.
+  The line under the name always shows the address, the pid and the process, so
+  a row's real identity is visible even when it calls itself "Docker Desktop".
+- A row is probed and opened at the same address. `localhost` is never used,
+  because it resolves to both `::1` and `127.0.0.1` — which can be two different
+  processes, one probed and the other opened.
+- "This is a macOS system service, hide it" requires the executable to live in
+  `/System`, `/usr/libexec` and friends, not merely to be named like one, and a
+  LAN-exposed port is never hidden on the strength of its name.
+- Builds are signed with the hardened runtime, which blocks code injection into
+  the process. The signature is ad-hoc rather than Developer ID: the app is not
+  notarised, so Gatekeeper has no ticket to check — see issue #1.
+
 ## Build only
 
 ```sh

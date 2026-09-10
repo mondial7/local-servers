@@ -30,7 +30,13 @@ if [ ${#ARCHS[@]} -eq 0 ]; then
 fi
 
 lipo -create "${ARCHS[@]}" -output "$APP/Contents/MacOS/LocalServers"
-codesign --force --sign - --timestamp=none "$APP" >/dev/null 2>&1 || true
+
+# --options runtime turns on the hardened runtime, which blocks code injection
+# into this process (DYLD_INSERT_LIBRARIES, unsigned dylibs) — worth having even
+# with an ad-hoc signature, since the app is long-lived and can be a login item.
+# A signing failure must fail the build: release.sh publishes exactly this bundle.
+codesign --force --sign - --options runtime --timestamp=none "$APP"
+codesign --verify --strict "$APP"
 
 echo "built: $APP"
 lipo -archs "$APP/Contents/MacOS/LocalServers"

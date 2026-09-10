@@ -135,7 +135,7 @@ struct ServerRow: View {
     @State private var hovering = false
 
     var body: some View {
-        Button(action: { open(entry.localURL) }) {
+        Button(action: { if let url = entry.localURL { open(url) } }) {
             HStack(spacing: 9) {
                 Circle().fill(statusColor).frame(width: 7, height: 7)
 
@@ -176,12 +176,16 @@ struct ServerRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .contextMenu {
-            Button("Open \(entry.localURL.absoluteString)") { open(entry.localURL) }
+            if let url = entry.localURL {
+                Button("Open \(url.absoluteString)") { open(url) }
+            }
             if let lan = entry.lanURL {
                 Button("Open \(lan.absoluteString)") { open(lan) }
             }
             Divider()
-            Button("Copy URL") { copy(entry.localURL.absoluteString) }
+            if let url = entry.localURL {
+                Button("Copy URL") { copy(url.absoluteString) }
+            }
             if let lan = entry.lanURL {
                 Button("Copy LAN URL") { copy(lan.absoluteString) }
             }
@@ -189,8 +193,11 @@ struct ServerRow: View {
         }
     }
 
+    /// The name on the row above is chosen by whatever is listening — a page
+    /// <title> or an executable name — so the line under it carries the identity
+    /// the user can actually verify: the address probed and the pid behind it.
     private var subtitle: String {
-        var parts = ["localhost:\(entry.port.port)", entry.port.command]
+        var parts = ["\(entry.port.address):\(entry.port.port)", "pid \(entry.port.pid)", entry.port.command]
         if let code = entry.probe?.statusCode, code >= 400 { parts.append("HTTP \(code)") }
         else if !entry.isWeb { parts.append("not HTTP") }
         return parts.joined(separator: "  ·  ")

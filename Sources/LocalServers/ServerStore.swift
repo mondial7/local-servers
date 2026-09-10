@@ -26,20 +26,38 @@ struct ServerEntry: Identifiable {
         guard isBrowsable else { return isWeb ? 2 : 3 }
         return probe?.kind == "HTML" ? 0 : 1
     }
-    var localURL: URL { URL(string: "\(scheme)://localhost:\(port.port)/")! }
+    /// Built from the address we actually probed, so the browser cannot be
+    /// sent to a different process than the one this row describes.
+    var localURL: URL? { URL(string: "\(scheme)://\(port.address):\(port.port)/") }
     var lanURL: URL? {
         guard port.isExposedToLAN, let ip = NetworkInfo.lanAddress() else { return nil }
         return URL(string: "\(scheme)://\(ip):\(port.port)/")
     }
 
     /// macOS ships a pile of always-on listeners; they are noise in a dev tool.
+    /// The name alone proves nothing — any binary can call itself `trustd` — so
+    /// the executable must also live where only root can put it, and a
+    /// LAN-exposed port is never hidden on the strength of its name.
     var isSystemService: Bool {
+        guard port.isApplePath, !port.isExposedToLAN else { return false }
         let known: Set<String> = [
             "ControlCenter", "rapportd", "sharingd", "AirPlayXPCHelper", "remoted", "launchd",
             "mDNSResponder", "identityservicesd", "apsd", "cloudd", "distnoted", "coreaudiod",
             "netbiosd", "SubmitDiagInfo", "AppleIDSettings", "trustd", "nsurlsessiond",
         ]
         return known.contains(port.command)
+    }
+}
+
+/// One address+port pair to probe. Ports alone are not unique: IPv4 and IPv6
+/// binds of the same number can belong to different processes.
+struct ProbeTarget: Hashable {
+    var host: String
+    var port: Int
+
+    init(_ listening: ListeningPort) {
+        host = listening.address
+        port = listening.port
     }
 }
 
@@ -69,19 +87,21 @@ final class ServerStore: ObservableObject {
         let ip = await Task.detached(priority: .utility) { NetworkInfo.lanAddress() }.value
 
         // Probe every port at once; each has a hard 1.5s timeout.
-        let probes = await withTaskGroup(of: (Int, ProbeResult?).self) { group -> [Int: ProbeResult] in
-            for port in Set(ports.map(\.port)) {
-                group.addTask { (port, await Prober.probe(port: port)) }
+        let probes = await withTaskGroup(of: (ProbeTarget, ProbeResult?).self) { group -> [ProbeTarget: ProbeResult] in
+            // Two processes can hold 127.0.0.1:8080 and [::1]:8080 at once, so a
+            // result belongs to an address and port, never to a port alone.
+            for target in Set(ports.map(ProbeTarget.init)) {
+                group.addTask { (target, await Prober.probe(host: target.host, port: target.port)) }
             }
-            var result: [Int: ProbeResult] = [:]
-            for await (port, probe) in group {
-                if let probe { result[port] = probe }
+            var result: [ProbeTarget: ProbeResult] = [:]
+            for await (target, probe) in group {
+                if let probe { result[target] = probe }
             }
             return result
         }
 
         entries = ports
-            .map { ServerEntry(port: $0, probe: probes[$0.port]) }
+            .map { ServerEntry(port: $0, probe: probes[ProbeTarget($0)]) }
             .sorted { lhs, rhs in
                 // Pages you can open first, then APIs, then everything else.
                 if lhs.rank != rhs.rank { return lhs.rank < rhs.rank }
